@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "extract"
-version = "0.1.0"
+version = "0.1.1"
 description = "Extract artifacts from installed Android packages."
 authors = ["Jojo <jonas.uliana@pm.me>"]
 license = "WTFPL"
