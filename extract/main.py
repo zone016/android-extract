@@ -92,7 +92,7 @@ def main(
     if list_devices and not package_name:
         inf('Available device(s):')
         for device in devices:
-            console_stdout.print(f'- {device}')
+            console_stdout.print(f'- {device}', highlight=False)
         exit(0)
 
     if len(devices) > 1:
