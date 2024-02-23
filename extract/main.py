@@ -89,6 +89,12 @@ def main(
         error_message('No devices are detected.')
         exit(1)
 
+    if list_devices and not package_name:
+        inf('Available device(s):')
+        for device in devices:
+            console_stdout.print(f'- {device}')
+        exit(0)
+
     if len(devices) > 1:
         error_message(
             'Multiple devices are detected. '
