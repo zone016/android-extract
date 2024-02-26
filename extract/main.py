@@ -13,19 +13,67 @@ app = typer.Typer(
 )
 
 
+def uninstall(adb: Adb, device: str, package: str) -> None:
+    inf(f'Uninstalling {package}...')
+    is_uninstalled = adb.uninstall_app(device, package)
+
+    if is_uninstalled:
+        suc('Package uninstalled!')
+        exit(0)
+    else:
+        err('Unable to uninstall package!')
+        exit(1)
+
+
+def dump_devices(adb: Adb) -> None:
+    inf('Available device(s):')
+    for device in adb.list_devices():
+        print(f'- {device}')
+    exit(0)
+
+
+def pull_package(adb: Adb, device: str, package: str, output_dir: str) -> None:
+    if not output_dir:
+        output_dir = package
+        inf(f'Using [b]{sanitize(package)}[/b] as the output directory.')
+
+    if Path(output_dir).is_dir():
+        err(f'Output directory [b]{sanitize(output_dir)}[/b] already exists.')
+        exit(1)
+
+    artifacts = adb.get_application_artifacts(device, package)
+    if not artifacts or len(artifacts) == 0:
+        err('Package does not have any artifact.')
+        exit(1)
+
+    Path(output_dir).mkdir()
+    inf(f'Found [b]#{len(artifacts)} artifact(s)[/b].')
+    for artifact in artifacts:
+        file_name = Path(artifact).name
+        destination_path = Path(output_dir) / Path(file_name)
+        inf(f'Extracting artifact [b]{sanitize(file_name)}[/b]...')
+        adb.pull_file(device, artifact, str(destination_path))
+        suc('Artifact extracted successfully!')
+
+    inf(f'Artifacts extracted to [b]{sanitize(output_dir)}[/b]!')
+
+
 @app.command()
 def main(
-    list_devices: bool = typer.Option(
-        False, '--list-devices', '-l', help='List available devices.'
-    ),
     package_name: Optional[str] = typer.Argument(
         None, help='The package name from which to extract artifacts.'
+    ),
+    list_devices: bool = typer.Option(
+        False, '--list-devices', '-l', help='List available devices.'
     ),
     output_dir: Optional[str] = typer.Option(
         None, '--output', '-o', help='Where to save the extracted artifact(s).'
     ),
     device: Optional[str] = typer.Option(
         None, '--device', '-d', help='Specify the device to extract from.'
+    ),
+    uninstall_app: bool = typer.Option(
+        False, '--uninstall', '-u', help='If specified, uninstall.'
     ),
 ):
     if not list_devices and not package_name:
@@ -62,10 +110,7 @@ def main(
         exit(1)
 
     if list_devices and not package_name:
-        inf('Available device(s):')
-        for device in devices:
-            print(f'- {device}')
-        exit(0)
+        dump_devices(adb)
 
     if len(devices) > 1:
         err(
@@ -95,30 +140,10 @@ def main(
 
     package = packages[0]
     suc(f'Package [b]{sanitize(package)}[/b] found!')
+    if uninstall_app:
+        uninstall(adb, android_device, package)
 
-    if not output_dir:
-        output_dir = package
-        inf(f'Using [b]{sanitize(package)}[/b] as the output directory.')
-
-    if Path(output_dir).is_dir():
-        err(f'Output directory [b]{sanitize(output_dir)}[/b] already exists.')
-        exit(1)
-
-    artifacts = adb.get_application_artifacts(android_device, package)
-    if not artifacts or len(artifacts) == 0:
-        err('Package does not have any artifact.')
-        exit(1)
-
-    Path(output_dir).mkdir()
-    inf(f'Found [b]#{len(artifacts)} artifact(s)[/b].')
-    for artifact in artifacts:
-        file_name = Path(artifact).name
-        destination_path = Path(output_dir) / Path(file_name)
-        inf(f'Extracting artifact [b]{sanitize(file_name)}[/b]...')
-        adb.pull_file(android_device, artifact, str(destination_path))
-        suc('Artifact extracted successfully!')
-
-    inf(f'Artifacts extracted to [b]{sanitize(output_dir)}[/b]!')
+    pull_package(adb, android_device, package, output_dir)
 
 
 if __name__ == '__main__':

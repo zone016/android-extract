@@ -11,9 +11,9 @@ extract = "extract.main:app"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-py-adb = {git = "https://github.com/zone016/py-libs.git", subdirectory = "py-adb"}
 printer = {git = "https://github.com/zone016/py-libs.git", subdirectory = "printer"}
 typer = {extras = ["all"], version = "^0.9.0"}
+py-adb = {git = "https://github.com/zone016/py-libs.git", subdirectory = "py-adb"}
 
 [tool.poetry.group.dev.dependencies]
 bandit = "^1.7.7"
