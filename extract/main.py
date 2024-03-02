@@ -13,7 +13,7 @@ app = typer.Typer(
 )
 
 
-def install(adb: Adb, device: str, origin: str) -> None:
+def install_package(adb: Adb, device: str, origin: str) -> None:
     if not Path(origin).exists():
         err(f'The origin {sanitize(origin)} does not exists.')
         exit(1)
@@ -54,7 +54,7 @@ def install(adb: Adb, device: str, origin: str) -> None:
             exit(1)
 
 
-def uninstall(adb: Adb, device: str, package: str) -> None:
+def uninstall_package(adb: Adb, device: str, package: str) -> None:
     inf(f'Uninstalling {package}...')
     is_uninstalled = adb.uninstall_app(device, package)
 
@@ -66,7 +66,7 @@ def uninstall(adb: Adb, device: str, package: str) -> None:
         exit(1)
 
 
-def dump_devices(adb: Adb) -> None:
+def list_devices(adb: Adb) -> None:
     inf('Available device(s):')
     for device in adb.list_devices():
         print(f'- {device}')
@@ -101,36 +101,36 @@ def pull_package(adb: Adb, device: str, package: str, output_dir: str) -> None:
 
 @app.command()
 def main(
-    package_name: Optional[str] = typer.Argument(
+    package_name_argument: Optional[str] = typer.Argument(
         None, help='The package name or path to an artifact to be installed.'
     ),
-    list_devices: bool = typer.Option(
+    list_devices_option: bool = typer.Option(
         False, '--list-devices', '-lD', help='List available devices.'
     ),
-    output_dir: Optional[str] = typer.Option(
+    output_dir_option: Optional[str] = typer.Option(
         None, '--output', '-o', help='Where to save the extracted artifact(s).'
     ),
-    device: Optional[str] = typer.Option(
+    device_option: Optional[str] = typer.Option(
         None, '--device', '-d', help='Specify the device to extract from.'
     ),
-    uninstall_app: bool = typer.Option(
+    uninstall_app_option: bool = typer.Option(
         False, '--uninstall', '-u', help='If specified, uninstall.'
     ),
-    install_app: bool = typer.Option(
+    install_app_option: bool = typer.Option(
         False,
         '--install',
         '-i',
         help='Install split app or single package from the argument.',
     ),
 ):
-    if not list_devices and not package_name:
+    if not list_devices_option and not package_name_argument:
         err(
             'You must specify at least one option. '
             'Check [b]--help[/] for more information.'
         )
         exit(1)
 
-    if list_devices and package_name:
+    if list_devices_option and package_name_argument:
         err('You cannot list devices and pull artifacts at the same time.')
         exit(1)
 
@@ -156,8 +156,8 @@ def main(
         err('No devices are detected.')
         exit(1)
 
-    if list_devices and not package_name:
-        dump_devices(adb)
+    if list_devices_option and not package_name_argument:
+        list_devices(adb)
 
     if len(devices) > 1:
         err(
@@ -169,19 +169,19 @@ def main(
 
     android_device = devices[0] if len(devices) == 1 else None
     if not android_device:
-        if device not in devices:
+        if device_option not in devices:
             err('Device does not exist in your host.')
             exit(1)
-        android_device = devices[devices.index(device)]
+        android_device = devices[devices.index(device_option)]
 
-    if install_app and uninstall_app:
+    if install_app_option and uninstall_app_option:
         err('You cannot specify both install and uninstall!')
         exit(1)
 
-    if install_app:
-        install(adb, android_device, package_name)
+    if install_app_option:
+        install_package(adb, android_device, package_name_argument)
 
-    packages = adb.search_package(android_device, package_name)
+    packages = adb.search_package(android_device, package_name_argument)
     if len(packages) == 0:
         err('No packages found with the specified name.')
         inf(
@@ -199,10 +199,10 @@ def main(
     package = packages[0]
     suc(f'Package [b]{sanitize(package)}[/b] found!')
 
-    if uninstall_app:
-        uninstall(adb, android_device, package)
+    if uninstall_app_option:
+        uninstall_package(adb, android_device, package)
 
-    pull_package(adb, android_device, package, output_dir)
+    pull_package(adb, android_device, package, output_dir_option)
 
 
 if __name__ == '__main__':
