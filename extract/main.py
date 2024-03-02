@@ -73,7 +73,9 @@ def list_devices(adb: Adb) -> None:
     exit(0)
 
 
-def pull_package(adb: Adb, device: str, package: str, output_dir: Path) -> None:
+def pull_package(
+    adb: Adb, device: str, package: str, output_dir: Path
+) -> None:
     if not output_dir:
         output_dir = package
         inf(f'Using [b]{sanitize(package)}[/b] as the output directory.')
@@ -124,7 +126,9 @@ def search_package(adb: Adb, device: str, package: str) -> str:
 @app.command()
 def main(
     package_argument: Optional[str] = typer.Argument(
-        None, help='The package name or path to an artifact to be installed.'
+        None,
+        help='The package name or path to an artifact to be installed.',
+        show_default=False,
     ),
     list_devices_option: bool = typer.Option(
         False, '--list-devices', '-lD', help='List available devices.'
