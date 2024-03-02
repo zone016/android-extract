@@ -73,7 +73,7 @@ def list_devices(adb: Adb) -> None:
     exit(0)
 
 
-def pull_package(adb: Adb, device: str, package: str, output_dir: str) -> None:
+def pull_package(adb: Adb, device: str, package: str, output_dir: Path) -> None:
     if not output_dir:
         output_dir = package
         inf(f'Using [b]{sanitize(package)}[/b] as the output directory.')
@@ -99,19 +99,52 @@ def pull_package(adb: Adb, device: str, package: str, output_dir: str) -> None:
     inf(f'Artifacts extracted to [b]{sanitize(output_dir)}[/b]!')
 
 
+def search_package(adb: Adb, device: str, package: str) -> str:
+    packages = adb.search_package(device, package)
+    if len(packages) == 0:
+        err('No packages found with the specified name.')
+        inf(
+            'Maybe you are trying to install? '
+            'Check [b]--help[/b] for more details.'
+        )
+        exit(1)
+
+    if len(packages) > 1:
+        war('Multiple packages found with the specified name:')
+        for package in packages:
+            print(f'- {sanitize(package)}')
+        exit(1)
+
+    package = packages[0]
+    suc(f'Package [b]{sanitize(package)}[/b] found!')
+
+    return package
+
+
 @app.command()
 def main(
-    package_name_argument: Optional[str] = typer.Argument(
+    package_argument: Optional[str] = typer.Argument(
         None, help='The package name or path to an artifact to be installed.'
     ),
     list_devices_option: bool = typer.Option(
         False, '--list-devices', '-lD', help='List available devices.'
     ),
-    output_dir_option: Optional[str] = typer.Option(
-        None, '--output', '-o', help='Where to save the extracted artifact(s).'
+    pull_package_option: bool = typer.Option(
+        False, '--pull-package', '-p', help='Pull artifacts from a package.'
+    ),
+    output_dir_option: Optional[Path] = typer.Option(
+        None,
+        '--output',
+        '-o',
+        help='Where to save the extracted artifact(s).',
+        show_default=False,
     ),
     device_option: Optional[str] = typer.Option(
-        None, '--device', '-d', help='Specify the device to extract from.'
+        None,
+        '--device',
+        '-d',
+        help='Specify the device to extract from.',
+        show_default=False,
     ),
     uninstall_app_option: bool = typer.Option(
         False, '--uninstall', '-u', help='If specified, uninstall.'
@@ -123,17 +156,6 @@ def main(
         help='Install split app or single package from the argument.',
     ),
 ):
-    if not list_devices_option and not package_name_argument:
-        err(
-            'You must specify at least one option. '
-            'Check [b]--help[/] for more information.'
-        )
-        exit(1)
-
-    if list_devices_option and package_name_argument:
-        err('You cannot list devices and pull artifacts at the same time.')
-        exit(1)
-
     adb: Adb
     try:
         adb = Adb()
@@ -156,8 +178,9 @@ def main(
         err('No devices are detected.')
         exit(1)
 
-    if list_devices_option and not package_name_argument:
+    if list_devices_option:
         list_devices(adb)
+        exit(0)
 
     if len(devices) > 1:
         err(
@@ -167,42 +190,34 @@ def main(
         )
         exit(1)
 
-    android_device = devices[0] if len(devices) == 1 else None
-    if not android_device:
+    device = devices[0] if len(devices) == 1 else None
+    if not device:
         if device_option not in devices:
             err('Device does not exist in your host.')
             exit(1)
-        android_device = devices[devices.index(device_option)]
+        device = devices[devices.index(device_option)]
 
     if install_app_option and uninstall_app_option:
         err('You cannot specify both install and uninstall!')
         exit(1)
 
     if install_app_option:
-        install_package(adb, android_device, package_name_argument)
-
-    packages = adb.search_package(android_device, package_name_argument)
-    if len(packages) == 0:
-        err('No packages found with the specified name.')
-        inf(
-            'Maybe you are trying to install? '
-            'Check [b]--help[/b] for more details.'
-        )
-        exit(1)
-
-    if len(packages) > 1:
-        war('Multiple packages found with the specified name:')
-        for package in packages:
-            print(f'- {sanitize(package)}')
-        exit(1)
-
-    package = packages[0]
-    suc(f'Package [b]{sanitize(package)}[/b] found!')
+        install_package(adb, device, package_argument)
+        exit(0)
 
     if uninstall_app_option:
-        uninstall_package(adb, android_device, package)
+        package = search_package(adb, device, package_argument)
+        uninstall_package(adb, device, package)
+        exit(0)
 
-    pull_package(adb, android_device, package, output_dir_option)
+    if pull_package_option:
+        package = search_package(adb, device, package_argument)
+        pull_package(adb, device, package, output_dir_option)
+        exit(0)
+
+    err('No actions was taken since you did not provided any option.')
+    inf('Try consulting [b]--help[/b].')
+    exit(1)
 
 
 if __name__ == '__main__':
