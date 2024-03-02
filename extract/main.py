@@ -1,16 +1,10 @@
 #! /usr/bin/env python3
 from pathlib import Path
-from typing import Optional
 
-import typer
+import click
 from printer.console import err, inf, sanitize, suc, war
 from py_adb import Adb
 from py_adb.exceptions import AdbHaveMultipleMatches, AdbIsNotAvailable
-
-app = typer.Typer(
-    help='Extract installed Android packages artifacts from remotes',
-    name='extract',
-)
 
 
 def install_package(adb: Adb, device: str, origin: str) -> None:
@@ -26,12 +20,14 @@ def install_package(adb: Adb, device: str, origin: str) -> None:
                 f'The package [b]{Path(sanitize(origin)).name}[/b] '
                 f'was installed!'
             )
+
             exit(0)
         else:
             err(
                 f'Unable to install package '
                 f'[b]{Path(sanitize(origin)).name}[/b].'
             )
+
             exit(1)
     else:
         packages = [
@@ -76,12 +72,11 @@ def list_devices(adb: Adb) -> None:
 def pull_package(
     adb: Adb, device: str, package: str, output_dir: Path
 ) -> None:
-    if not output_dir:
-        output_dir = package
-        inf(f'Using [b]{sanitize(package)}[/b] as the output directory.')
-
-    if Path(output_dir).is_dir():
-        err(f'Output directory [b]{sanitize(output_dir)}[/b] already exists.')
+    if output_dir.is_dir():
+        err(
+            f'Output directory [b]{sanitize(str(output_dir))}[/b] '
+            f'already exists.'
+        )
         exit(1)
 
     artifacts = adb.get_application_artifacts(device, package)
@@ -95,10 +90,11 @@ def pull_package(
         file_name = Path(artifact).name
         destination_path = Path(output_dir) / Path(file_name)
         inf(f'Extracting artifact [b]{sanitize(file_name)}[/b]...')
+
         adb.pull_file(device, artifact, str(destination_path))
         suc('Artifact extracted successfully!')
 
-    inf(f'Artifacts extracted to [b]{sanitize(output_dir)}[/b]!')
+    inf(f'Artifacts extracted to [b]{sanitize(str(output_dir))}[/b]!')
 
 
 def search_package(adb: Adb, device: str, package: str) -> str:
@@ -123,105 +119,141 @@ def search_package(adb: Adb, device: str, package: str) -> str:
     return package
 
 
-@app.command()
-def main(
-    package_argument: Optional[str] = typer.Argument(
-        None,
-        help='The package name or path to an artifact to be installed.',
-        show_default=False,
-    ),
-    list_devices_option: bool = typer.Option(
-        False, '--list-devices', '-lD', help='List available devices.'
-    ),
-    pull_package_option: bool = typer.Option(
-        False, '--pull-package', '-p', help='Pull artifacts from a package.'
-    ),
-    output_dir_option: Optional[Path] = typer.Option(
-        None,
-        '--output',
-        '-o',
-        help='Where to save the extracted artifact(s).',
-        show_default=False,
-    ),
-    device_option: Optional[str] = typer.Option(
-        None,
-        '--device',
-        '-d',
-        help='Specify the device to extract from.',
-        show_default=False,
-    ),
-    uninstall_app_option: bool = typer.Option(
-        False, '--uninstall', '-u', help='If specified, uninstall.'
-    ),
-    install_app_option: bool = typer.Option(
-        False,
-        '--install',
-        '-i',
-        help='Install split app or single package from the argument.',
-    ),
-):
-    adb: Adb
+def get_adb_instance() -> Adb:
     try:
         adb = Adb()
     except AdbIsNotAvailable:
         err(
-            'The Android Debug Bridge is not available in your [b]$PATH[/]. '
-            'Make sure you have the Android SDK available with the correct '
-            'tooling available.'
+            'The Android Debug Bridge is not available in your $PATH. '
+            'Make sure you have the Android SDK available with the '
+            'correct tooling available.'
         )
         exit(1)
     except AdbHaveMultipleMatches:
         err(
-            'You have multiple matches for Android Debug Bridge in '
-            '[b]$PATH[/]. Make sure you have only one.'
+            'You have multiple matches for Android Debug Bridge in $PATH. '
+            'Make sure you have only one.'
         )
         exit(1)
 
+    return adb
+
+
+def device_exists(adb: Adb, device: str) -> bool:
+    return device in adb.list_devices()
+
+
+def get_device(adb: Adb) -> str:
     devices = adb.list_devices()
     if len(devices) == 0:
-        err('No devices are detected.')
+        err('No devices are visible for Android Debug Bridge.')
         exit(1)
 
-    if list_devices_option:
-        list_devices(adb)
-        exit(0)
+    if len(devices) == 1:
+        device = devices[0]
+        return device
 
     if len(devices) > 1:
         err(
-            'Multiple devices are detected. '
-            'Specify the device to extract from using '
-            '[b]--device[/b] or [b]-d[/] option.'
+            'Multiple devices are visible for Android Debug Bridge. '
+            'Please specify the device to extract from: '
+        )
+        for device in devices:
+            print(f'- {device}')
+
+        exit(1)
+
+    return devices[0]
+
+
+def ensure_get_device(adb: Adb, device: str) -> str:
+    device = device if device else get_device(adb)
+    if not device_exists(adb, device):
+        err(
+            f'Device [b]{sanitize(device)}[/b] does not exists '
+            f'for Android Debug Bridge.'
         )
         exit(1)
 
-    device = devices[0] if len(devices) == 1 else None
-    if not device:
-        if device_option not in devices:
-            err('Device does not exist in your host.')
-            exit(1)
-        device = devices[devices.index(device_option)]
+    return device
 
-    if install_app_option and uninstall_app_option:
-        err('You cannot specify both install and uninstall!')
-        exit(1)
 
-    if install_app_option:
-        install_package(adb, device, package_argument)
-        exit(0)
+@click.group(help='Extract installed Android packages artifacts from remotes')
+def app():
+    pass
 
-    if uninstall_app_option:
-        package = search_package(adb, device, package_argument)
-        uninstall_package(adb, device, package)
-        exit(0)
 
-    if pull_package_option:
-        package = search_package(adb, device, package_argument)
-        pull_package(adb, device, package, output_dir_option)
-        exit(0)
+@app.command(name='list-devices', help='List available devices.')
+def list_devices_command():
+    adb = get_adb_instance()
 
-    err('No actions was taken since you did not provided any option.')
-    inf('Try consulting [b]--help[/b].')
-    exit(1)
+    inf('Available device(s):')
+    for device in adb.list_devices():
+        print(f'- {device}')
+
+    exit(0)
+
+
+@app.command(
+    name='install',
+    help='Install split app or single package from the argument.',
+)
+@click.argument('package', required=True)
+@click.option(
+    '--device',
+    '-d',
+    help='Specify the device to extract from.',
+    required=False,
+)
+def install_command(package: str, device: str | None):
+    adb = get_adb_instance()
+    device = ensure_get_device(adb, device)
+
+    install_package(adb, device, package)
+    exit(0)
+
+
+@app.command(name='uninstall', help='Uninstall an app.')
+@click.argument('package', required=True)
+@click.option(
+    '--device',
+    '-d',
+    help='Specify the device to extract from.',
+    required=False,
+)
+def uninstall_command(package: str, device: str):
+    adb = get_adb_instance()
+    device = ensure_get_device(adb, device)
+    package = search_package(adb, device, package)
+
+    uninstall_package(adb, device, package)
+    exit(0)
+
+
+@app.command(name='pull', help='Pull artifacts from a package.')
+@click.argument('package', required=True)
+@click.option(
+    '--output',
+    '-o',
+    type=click.Path(),
+    help='Where to save the extracted artifact(s).',
+    required=False,
+)
+@click.option(
+    '--device',
+    '-d',
+    help='Specify the device to extract from.',
+    required=False,
+)
+def pull_command(package: str, output: Path | None, device: str | None):
+    adb = get_adb_instance()
+    device = ensure_get_device(adb, device)
+
+    package = search_package(adb, device, package)
+    output = output if output else Path(package)
+
+    pull_package(adb, device, package, output)
+    exit(0)
 
 
 if __name__ == '__main__':

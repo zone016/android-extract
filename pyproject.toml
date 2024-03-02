@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "extract"
-version = "0.2.0"
+version = "0.3.0"
 description = "Extract artifacts from installed Android packages."
 authors = ["Jojo <jonas.uliana@pm.me>"]
 license = "WTFPL"
@@ -12,8 +12,8 @@ extract = "extract.main:app"
 [tool.poetry.dependencies]
 python = "^3.10"
 printer = {git = "https://github.com/zone016/py-libs.git", subdirectory = "printer"}
-typer = {extras = ["all"], version = "^0.9.0"}
 py-adb = {git = "https://github.com/zone016/py-libs.git", subdirectory = "py-adb"}
+click = "^8.1.7"
 
 [tool.poetry.group.dev.dependencies]
 bandit = "^1.7.7"
